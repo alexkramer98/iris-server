@@ -1,0 +1,84 @@
+{
+  "extends": ["hardcore", "hardcore/ts"],
+  "parserOptions": {
+    "project": "./tsconfig.json"
+  },
+  "rules": {
+    "no-duplicate-imports": "off",
+    "import/no-duplicates": "off",
+    "perfectionist/sort-objects": "off",
+    "sort-class-members/sort-class-members": "off",
+    "@typescript-eslint/prefer-destructuring": "off",
+    "no-undef-init": "off",
+    "compat/compat": "off",
+    "@stylistic/max-len": "off",
+    "putout/putout": "off",
+    "max-len": "off",
+    "no-continue": "off",
+    "@typescript-eslint/prefer-readonly-parameter-types": "off",
+    "sonarjs/no-one-iteration-loop": "off",
+
+    "camelcase": "warn",
+    "sonarjs/elseif-without-else": "warn",
+    "@typescript-eslint/consistent-type-assertions": "warn",
+    "@typescript-eslint/naming-convention": [
+      "warn",
+      {
+        "selector": "variable",
+        "modifiers": ["const"],
+        "format": ["UPPER_CASE", "strictCamelCase"]
+      },
+      {
+        "selector": "default",
+        "format": ["strictCamelCase"]
+      },
+      {
+        "selector": ["function", "import"],
+        "format": ["strictCamelCase", "StrictPascalCase"]
+      },
+      {
+        "selector": ["typeLike", "enumMember"],
+        "format": ["StrictPascalCase"]
+      },
+      {
+        "selector": ["variable", "parameter", "accessor"],
+        "types": ["boolean"],
+        "format": ["PascalCase"],
+        "prefix": ["is", "has", "are", "can", "should", "did", "will"]
+      },
+      {
+        "selector": ["objectLiteralProperty"],
+        "format": null,
+        "modifiers": ["requiresQuotes"]
+      },
+      {
+        "selector": ["property"],
+        "types": ["boolean"],
+        "format": ["PascalCase"],
+        "prefix": ["is", "has", "are", "can", "should", "did", "will"],
+        "filter": {
+          "regex": "^(allowfullscreen|allowFullScreen|async|autofocus|autoFocus|autoplay|autoPlay|checked|defaultChecked|contenteditable|contentEditable|controls|default|defer|disabled|draggable|formnovalidate|formNoValidate|hidden|inert|ismap|itemscope|itemScope|loop|multiple|muted|nomodule|noModule|novalidate|noValidate|open|playsinline|playsInline|readonly|readOnly|required|reversed|selected|spellcheck|spellCheck)$",
+          "match": false
+        }
+      }
+    ],
+
+    "eslint-comments/require-description": "error",
+    "@typescript-eslint/parameter-properties": [
+      "error",
+      { "prefer": "parameter-property" }
+    ],
+    "func-style": ["error", "expression"],
+    "@typescript-eslint/no-magic-numbers": [
+      "error",
+      {
+        "ignore": [0, 1, -1]
+      }
+    ],
+    "lines-between-class-members": [
+      "error",
+      "always",
+      { "exceptAfterSingleLine": true }
+    ]
+  }
+}

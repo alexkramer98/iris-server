@@ -1,0 +1,25 @@
+{
+  "name": "iris-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "publish": "docker build --push --platform linux/amd64 -t alexkramer98/iris-server .",
+    "start": "bun ./src/index.ts"
+  },
+  "dependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "@types/node": "^25.0.3",
+    "@types/ws": "^8.18.1",
+    "avr-vad": "^1.0.9",
+    "dotenv": "^17.2.3",
+    "promise-socket": "^8.0.0",
+    "tsx": "^4.21.0",
+    "ws": "^8.18.3",
+    "zod": "^4.3.4"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-config-hardcore": "^49.0.0",
+    "prettier": "^3.7.4"
+  }
+}
