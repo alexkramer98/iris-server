@@ -17,6 +17,7 @@
     "no-continue": "off",
     "@typescript-eslint/prefer-readonly-parameter-types": "off",
     "sonarjs/no-one-iteration-loop": "off",
+    "etc/prefer-interface": "off",
 
     "camelcase": "warn",
     "sonarjs/elseif-without-else": "warn",

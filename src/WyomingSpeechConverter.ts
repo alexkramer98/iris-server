@@ -8,7 +8,7 @@ import SynthesizeError from "./errors/SynthesizeError";
 import TranscribeError from "./errors/TranscribeError";
 import SpeechConverter from "./SpeechConverter";
 
-export default class WyomingClient extends SpeechConverter<WyomingSpeechConfig> {
+export default class WyomingSpeechConverter extends SpeechConverter<WyomingSpeechConfig> {
   // eslint-disable-next-line @typescript-eslint/no-magic-numbers -- not a magic number here
   private readonly socketTimeout = 30_000;
 
@@ -188,6 +188,7 @@ export default class WyomingClient extends SpeechConverter<WyomingSpeechConfig> 
         buffer: audioChunks,
       };
     } catch (error) {
+      // todo: geen custom exceptions?
       throw new SynthesizeError(
         `Error while synthesizing audio: ${error instanceof Error ? error.message : "Unknown error"}`,
       );

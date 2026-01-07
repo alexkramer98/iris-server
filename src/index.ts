@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { config } from "dotenv";
 import { WebSocketServer } from "ws";
 
-import WyomingClient from "./WyomingClient";
+import WyomingSpeechConverter from "./WyomingSpeechConverter";
 
 config();
 
@@ -35,7 +35,7 @@ const clientServer = new WebSocketServer({
   port: Number(clientPort),
 });
 
-const wyomingClient = new WyomingClient("nl", {
+const wyomingClient = new WyomingSpeechConverter("nl", {
   whisperHost,
   whisperPort,
   piperHost,
@@ -47,7 +47,7 @@ const pcmAudioBuffer = fs.readFileSync("audio.wav");
 console.log(await wyomingClient.transcribe(pcmAudioBuffer));
 
 const ttsResult = await wyomingClient.synthesize(
-  "hallo, dit is een langere tekst. Deze tekst bevat dus veel meer data en zal langer duren.",
+  "Een wiki (aanvankelijk ook WikiWiki) is een verzameling interactieve hypertekstdocumenten die in een browserprogramma aangemaakt en bewerkt kunnen worden door middel van een bepaald type software. Kenmerkend aan de software is, dat op het internet of een intranet gepubliceerde webdocumenten door meerdere personen zonder programmeerkennis, kunnen worden bewerkt en gepubliceerd. Zowel het resultaat, als de software worden wiki genoemd, afgeleid van de Hawaïaanse uitdrukking wiki wiki, dat 'snel, vlug, beweeglijk' betekent.[1] De gebruiksmogelijkheid, de software en de naam zijn afkomstig van Ward Cunningham. De eerste wiki was de Portland Repository Pattern website, bekende voorbeelden van wiki's zijn Wikipedia, Catawiki[2] en Wikia.[3]",
 );
 
 console.log(ttsResult);
