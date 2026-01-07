@@ -1,13 +1,11 @@
-export default abstract class SpeechConverter<TConfig extends SpeechConfig> {
-  protected constructor(
-    protected readonly lang: Lang,
-    protected readonly config: TConfig,
-  ) {}
-
-  public abstract transcribe(audioBuffer: Buffer): Promise<string>;
-  public abstract synthesize(text: string): Promise<{
+export default interface SpeechConverter {
+  synthesize: (
+    text: string,
+    language: Lang,
+  ) => Promise<{
     buffer: Buffer;
     channels: number;
     sampleRate: number;
   }>;
+  transcribe: (audioBuffer: Buffer, language: Lang) => Promise<string>;
 }

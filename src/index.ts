@@ -2,49 +2,23 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs";
 
 import { config } from "dotenv";
-import { WebSocketServer } from "ws";
 
+import ApiServer from "./ApiServer";
 import WyomingSpeechConverter from "./WyomingSpeechConverter";
 
 config();
 
-const apiPort = process.env.API_PORT;
-const clientPort = process.env.CLIENT_PORT;
-const whisperHost = process.env.WYOMING_WHISPER_HOST;
-const whisperPort = process.env.WYOMING_WHISPER_PORT;
-const piperHost = process.env.WYOMING_PIPER_HOST;
-const piperPort = process.env.WYOMING_PIPER_PORT;
-
-if (apiPort === undefined || clientPort === undefined) {
-  throw new Error("Missing API_PORT or CLIENT_PORT");
-}
-
-if (whisperHost === undefined || whisperPort === undefined) {
-  throw new Error("Missing WYOMING_WHISPER_HOST or WYOMING_WHISPER_PORT");
-}
-
-if (piperHost === undefined || piperPort === undefined) {
-  throw new Error("Missing WYOMING_PIPER_HOST or WYOMING_PIPER_PORT");
-}
-
-const apiServer = new WebSocketServer({
-  port: Number(apiPort),
+const apiServer = new ApiServer({
+  notificationRequestHandler: async (target, payload) => {},
+  callRequestHandler: async (target, payload) => {},
+  clearNotificationRequestHandler: async (target, id) => {},
+  replayNotificationsRequest: async (target) => {},
 });
-
-const clientServer = new WebSocketServer({
-  port: Number(clientPort),
-});
-
-const wyomingClient = new WyomingSpeechConverter("nl", {
-  whisperHost,
-  whisperPort,
-  piperHost,
-  piperPort,
-});
+const wyomingClient = new WyomingSpeechConverter();
 
 const pcmAudioBuffer = fs.readFileSync("audio.wav");
 
-console.log(await wyomingClient.transcribe(pcmAudioBuffer));
+console.log(await wyomingClient.transcribe(pcmAudioBuffer, "nl"));
 
 const ttsResult = await wyomingClient.synthesize(
   "Een wiki (aanvankelijk ook WikiWiki) is een verzameling interactieve hypertekstdocumenten die in een browserprogramma aangemaakt en bewerkt kunnen worden door middel van een bepaald type software. Kenmerkend aan de software is, dat op het internet of een intranet gepubliceerde webdocumenten door meerdere personen zonder programmeerkennis, kunnen worden bewerkt en gepubliceerd. Zowel het resultaat, als de software worden wiki genoemd, afgeleid van de Hawaïaanse uitdrukking wiki wiki, dat 'snel, vlug, beweeglijk' betekent.[1] De gebruiksmogelijkheid, de software en de naam zijn afkomstig van Ward Cunningham. De eerste wiki was de Portland Repository Pattern website, bekende voorbeelden van wiki's zijn Wikipedia, Catawiki[2] en Wikia.[3]",

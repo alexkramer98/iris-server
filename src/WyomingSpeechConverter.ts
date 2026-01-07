@@ -4,17 +4,12 @@ import type { Socket } from "node:net";
 import { PromiseSocket } from "promise-socket";
 import { z } from "zod";
 
-import SynthesizeError from "./errors/SynthesizeError";
-import TranscribeError from "./errors/TranscribeError";
-import SpeechConverter from "./SpeechConverter";
+import { environment } from "./Environment";
+import type SpeechConverter from "./SpeechConverter";
 
-export default class WyomingSpeechConverter extends SpeechConverter<WyomingSpeechConfig> {
+export default class WyomingSpeechConverter implements SpeechConverter {
   // eslint-disable-next-line @typescript-eslint/no-magic-numbers -- not a magic number here
   private readonly socketTimeout = 30_000;
-
-  public constructor(lang: Lang, config: WyomingSpeechConfig) {
-    super(lang, config);
-  }
 
   private async sendJson(socket: PromiseSocket<Socket>, message: object) {
     await socket.write(`${JSON.stringify(message)}\n`);
@@ -53,10 +48,11 @@ export default class WyomingSpeechConverter extends SpeechConverter<WyomingSpeec
   private async sendTranscriptionRequest(
     socket: PromiseSocket<Socket>,
     audioBuffer: Buffer,
+    language: Lang,
   ) {
     await this.sendJson(socket, {
       type: "transcribe",
-      data: { language: this.lang },
+      data: { language },
     });
     await this.sendJson(socket, {
       type: "audio-chunk",
@@ -85,31 +81,28 @@ export default class WyomingSpeechConverter extends SpeechConverter<WyomingSpeec
     return payload.text;
   }
 
-  public async transcribe(audioBuffer: Buffer): Promise<string> {
-    try {
-      const socket = await this.getSocket(
-        this.config.whisperPort,
-        this.config.whisperHost,
-      );
+  public async transcribe(
+    audioBuffer: Buffer,
+    language: Lang,
+  ): Promise<string> {
+    const socket = await this.getSocket(
+      environment.WYOMING_WHISPER_PORT,
+      environment.WYOMING_WHISPER_HOST,
+    );
 
-      await this.sendTranscriptionRequest(socket, audioBuffer);
+    await this.sendTranscriptionRequest(socket, audioBuffer, language);
 
-      const result = await this.readStreamUntil(socket, '{"text": "');
+    const result = await this.readStreamUntil(socket, '{"text": "');
 
-      if (result === undefined) {
-        throw new Error("No result received from Whisper");
-      }
-
-      const transcript = this.parseTranscriptionResult(result);
-
-      socket.destroy();
-
-      return transcript;
-    } catch (error) {
-      throw new TranscribeError(
-        `Error while transcribing audio: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+    if (result === undefined) {
+      throw new Error("No result received from Whisper");
     }
+
+    const transcript = this.parseTranscriptionResult(result);
+
+    socket.destroy();
+
+    return transcript;
   }
 
   private collectAudioChunks(buffer: Buffer, initialOffset: number) {
@@ -161,37 +154,30 @@ export default class WyomingSpeechConverter extends SpeechConverter<WyomingSpeec
   public async synthesize(
     text: string,
   ): Promise<{ buffer: Buffer; channels: number; sampleRate: number }> {
-    try {
-      const socket = await this.getSocket(
-        this.config.piperPort,
-        this.config.piperHost,
-      );
+    const socket = await this.getSocket(
+      environment.WYOMING_PIPER_PORT,
+      environment.WYOMING_WHISPER_HOST,
+    );
 
-      await this.sendJson(socket, {
-        type: "synthesize",
-        data: { text },
-      });
+    await this.sendJson(socket, {
+      type: "synthesize",
+      data: { text },
+    });
 
-      const result = await this.readStreamUntil(socket, "audio-stop");
+    const result = await this.readStreamUntil(socket, "audio-stop");
 
-      if (result === undefined) {
-        throw new Error("No result received from Piper");
-      }
-
-      const { audioInfo, audioChunks } = this.parseSynthesizeResult(result);
-
-      socket.destroy();
-
-      return {
-        sampleRate: audioInfo.rate,
-        channels: audioInfo.channels,
-        buffer: audioChunks,
-      };
-    } catch (error) {
-      // todo: geen custom exceptions?
-      throw new SynthesizeError(
-        `Error while synthesizing audio: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+    if (result === undefined) {
+      throw new Error("No result received from Piper");
     }
+
+    const { audioInfo, audioChunks } = this.parseSynthesizeResult(result);
+
+    socket.destroy();
+
+    return {
+      sampleRate: audioInfo.rate,
+      channels: audioInfo.channels,
+      buffer: audioChunks,
+    };
   }
 }

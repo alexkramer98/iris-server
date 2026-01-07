@@ -4,6 +4,7 @@ import type { RawData, WebSocket } from "ws";
 import { WebSocketServer } from "ws";
 import { z } from "zod";
 
+import { environment } from "./Environment";
 import logger from "./Logger";
 
 /* eslint-disable @stylistic/padding-line-between-statements -- keep the types together */
@@ -25,6 +26,7 @@ export default class ApiServer {
   private activeClient: WebSocket | undefined;
 
   private readonly commandSchema = z.discriminatedUnion("command", [
+    // todo: language property for calls
     z.object({
       command: z.literal("call"),
       target: z.string(),
@@ -63,7 +65,6 @@ export default class ApiServer {
   ]);
 
   public constructor(
-    port: number,
     private readonly handlers: {
       callRequestHandler: CallRequestHandler;
       clearNotificationRequestHandler: ClearNotificationRequestHandler;
@@ -71,7 +72,7 @@ export default class ApiServer {
       replayNotificationsRequest: ReplayNotificationsRequestHandler;
     },
   ) {
-    this.wsServer = new WebSocketServer({ port });
+    this.wsServer = new WebSocketServer({ port: environment.API_PORT });
     this.wsServer.on("connection", (client) => {
       if (this.activeClient !== undefined) {
         // eslint-disable-next-line @typescript-eslint/no-magic-numbers -- 1008: Policy Violation
@@ -223,6 +224,8 @@ export default class ApiServer {
       throw new Error("Cannot trigger call: no active client");
     }
 
+    const url = `${environment.SERVER_URL}?token=${token}`;
+
     this.activeClient.send(
       JSON.stringify({
         command: "call-service",
@@ -235,9 +238,7 @@ export default class ApiServer {
 
             data: {
               intent_action: "android.intent.action.VIEW",
-
-              // todo: volledige ws url hier opgeven. externe url in config
-              intent_uri: `iris://trigger-call?token=${token}`,
+              intent_uri: `iris://trigger-call?url=${url}`,
               intent_package_name: "com.iris.companion",
               priority: "high",
               ttl: 0,
