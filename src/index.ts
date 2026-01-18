@@ -3,17 +3,16 @@ import fs from "node:fs";
 
 import { config } from "dotenv";
 
-import ApiServer from "./ApiServer";
+import { environment } from "./Environment";
+import HassClient from "./HassClient";
 import WyomingSpeechConverter from "./WyomingSpeechConverter";
 
 config();
 
-const apiServer = new ApiServer({
-  notificationRequestHandler: async (target, payload) => {},
-  callRequestHandler: async (target, payload) => {},
-  clearNotificationRequestHandler: async (target, id) => {},
-  replayNotificationsRequest: async (target) => {},
+const hassClient = new HassClient({
+  port: environment.API_PORT,
 });
+
 const wyomingClient = new WyomingSpeechConverter();
 
 const pcmAudioBuffer = fs.readFileSync("audio.wav");
