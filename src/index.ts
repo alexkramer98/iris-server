@@ -13,6 +13,10 @@ const hassClient = new HassClient({
   port: environment.API_PORT,
 });
 
+hassClient.onError(async (iets) => {
+  //   todo: logger
+});
+
 const wyomingClient = new WyomingSpeechConverter();
 
 const pcmAudioBuffer = fs.readFileSync("audio.wav");

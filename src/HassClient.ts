@@ -4,8 +4,6 @@ import type { RawData, WebSocket } from "ws";
 import { WebSocketServer } from "ws";
 import { z } from "zod";
 
-import logger from "./Logger";
-
 interface OutgoingCommandMap {
   notify: {
     actions: { id: string; text: string }[];
@@ -71,17 +69,12 @@ const incomingActions = {
   }),
 };
 
-const incomingActionVariants = [
+const incomingMessageSchema = z.discriminatedUnion("action", [
   incomingActions.notify,
   incomingActions.call,
   incomingActions.unNotify,
   incomingActions.replay,
-] as const;
-
-const incomingMessageSchema = z.discriminatedUnion(
-  "action",
-  incomingActionVariants,
-);
+]);
 
 type IncomingActionName = keyof typeof incomingActions;
 
@@ -94,18 +87,13 @@ export default class HassServer {
 
   private activeClient: WebSocket | undefined;
 
-  private readonly handlers: Partial<{
+  private readonly actionHandlers: Partial<{
     [TAction in IncomingActionName]: (
       payload: IncomingActionPayload<TAction>,
     ) => Promise<void>;
   }> = {};
 
-  public on<TAction extends IncomingActionName>(
-    action: TAction,
-    handler: (payload: IncomingActionPayload<TAction>) => Promise<void>,
-  ): void {
-    this.handlers[action] = handler;
-  }
+  private errorHandler: ((payload: Error) => void) | undefined = undefined;
 
   public constructor(config: { port: number }) {
     this.wsServer = new WebSocketServer({ port: config.port });
@@ -120,9 +108,11 @@ export default class HassServer {
 
       client.on("error", (error) => {
         if (this.activeClient === client) {
-          logger.error(
-            "An error occurred on the api websocket. Closing connection",
-            error,
+          this.emitErrorAndReply(
+            new Error(
+              `An error occurred on the api websocket: ${this.getErrorMessages(error)}`,
+              { cause: error },
+            ),
           );
 
           client.close(
@@ -143,10 +133,32 @@ export default class HassServer {
 
       client.on("message", (message) => {
         if (this.activeClient === client) {
-          void this.handleMessage(client, message);
+          void this.handleMessage(message);
         }
       });
     });
+  }
+
+  public onAction<TAction extends IncomingActionName>(
+    action: TAction,
+    handler: (payload: IncomingActionPayload<TAction>) => Promise<void>,
+  ) {
+    this.actionHandlers[action] = handler;
+  }
+
+  public onError(handler: (payload: Error) => void) {
+    this.errorHandler = handler;
+  }
+
+  public send<TAction extends keyof OutgoingCommandMap>(
+    command: TAction,
+    payload: OutgoingCommandMap[TAction],
+  ) {
+    this.sendJson({ command, payload });
+  }
+
+  private getErrorMessages(error: unknown) {
+    return error instanceof Error ? error.message : "Unknown error";
   }
 
   private parseMessage(message: RawData) {
@@ -161,29 +173,30 @@ export default class HassServer {
     action: TAction,
     payload: IncomingActionPayload<TAction>,
   ) {
-    await this.handlers[action]?.(payload);
+    await this.actionHandlers[action]?.(payload);
   }
 
-  private logErrorAndReply(
-    client: WebSocket,
-    errorMessage: string,
-    cause: unknown,
-  ) {
-    logger.error(errorMessage, cause);
-    client.send(JSON.stringify({ event: "error", errorMessage }));
+  private emitError(error: Error) {
+    this.errorHandler?.(error);
   }
 
-  private async handleMessage(client: WebSocket, message: RawData) {
+  private emitErrorAndReply(error: Error) {
+    this.sendJson({ event: "error", errorMessage: error.message });
+    this.emitError(error);
+  }
+
+  private async handleMessage(message: RawData) {
     let incomingMessage: z.infer<typeof incomingMessageSchema> | undefined =
       undefined;
 
     try {
       incomingMessage = this.parseMessage(message);
     } catch (error) {
-      this.logErrorAndReply(
-        client,
-        `Unprocessable payload received: ${error instanceof Error ? error.message : "Unknown error"}`,
-        error,
+      this.emitErrorAndReply(
+        new Error(
+          `Unprocessable payload received: ${this.getErrorMessages(error)}`,
+          { cause: error },
+        ),
       );
 
       return;
@@ -192,27 +205,22 @@ export default class HassServer {
     try {
       await this.handleAction(incomingMessage.action, incomingMessage.payload);
     } catch (error) {
-      this.logErrorAndReply(
-        client,
-        `Error while handling action "${incomingMessage.action}": ${error instanceof Error ? error.message : "Unknown error"}`,
-        error,
+      this.emitErrorAndReply(
+        new Error(
+          `Error while handling action "${incomingMessage.action}": ${this.getErrorMessages(error)}`,
+          {
+            cause: error,
+          },
+        ),
       );
     }
   }
 
-  public send<TAction extends keyof OutgoingCommandMap>(
-    command: TAction,
-    payload: OutgoingCommandMap[TAction],
-  ) {
+  private sendJson(payload: object) {
     if (this.activeClient === undefined) {
       throw new Error("Cannot send command: No active client");
     }
 
-    this.activeClient.send(
-      JSON.stringify({
-        command,
-        payload,
-      }),
-    );
+    this.activeClient.send(JSON.stringify(payload));
   }
 }
