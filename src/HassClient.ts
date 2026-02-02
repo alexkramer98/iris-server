@@ -4,32 +4,12 @@ import type { RawData, WebSocket } from "ws";
 import { WebSocketServer } from "ws";
 import { z } from "zod";
 
-interface OutgoingCommandMap {
-  notify: {
-    actions: { id: string; text: string }[];
-    icon: string;
-    isPersistent: boolean;
-    isSticky: boolean;
-    priority: string;
-    target: string;
-    text: string;
-    title: string;
-  };
-  startCall: {
-    target: string;
-    url: string;
-  };
-  unNotify: {
-    id: string;
-    target: string;
-  };
-}
-
 const incomingActions = {
   notify: z.object({
     action: z.literal("notify"),
 
     payload: z.object({
+      id: z.string(),
       target: z.string(),
       title: z.string(),
       icon: z.string(),
@@ -60,11 +40,12 @@ const incomingActions = {
     }),
   }),
 
-  replay: z.object({
-    action: z.literal("replay"),
+  reNotify: z.object({
+    action: z.literal("reNotify"),
 
     payload: z.object({
       target: z.string(),
+      id: z.string().optional(),
     }),
   }),
 };
@@ -73,8 +54,10 @@ const incomingMessageSchema = z.discriminatedUnion("action", [
   incomingActions.notify,
   incomingActions.call,
   incomingActions.unNotify,
-  incomingActions.replay,
+  incomingActions.reNotify,
 ]);
+
+type CallPayload = z.infer<typeof incomingActions.call>["payload"];
 
 type IncomingActionName = keyof typeof incomingActions;
 
@@ -82,7 +65,21 @@ type IncomingActionPayload<TAction extends IncomingActionName> = z.infer<
   (typeof incomingActions)[TAction]
 >["payload"];
 
-export default class HassServer {
+type NotificationPayload = z.infer<typeof incomingActions.notify>["payload"];
+
+interface OutgoingCommandMap {
+  notify: NotificationPayload;
+  startCall: {
+    target: string;
+    url: string;
+  };
+  unNotify: {
+    id: string;
+    target: string;
+  };
+}
+
+export default class HassClient {
   private readonly wsServer: WebSocketServer;
 
   private activeClient: WebSocket | undefined;
@@ -224,3 +221,5 @@ export default class HassServer {
     this.activeClient.send(JSON.stringify(payload));
   }
 }
+
+export type { CallPayload, NotificationPayload };

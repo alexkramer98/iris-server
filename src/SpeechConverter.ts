@@ -1,11 +1,8 @@
 export default interface SpeechConverter {
-  synthesize: (
-    text: string,
-    language: Lang,
-  ) => Promise<{
+  synthesize: (text: string) => Promise<{
     buffer: Buffer;
     channels: number;
     sampleRate: number;
   }>;
-  transcribe: (audioBuffer: Buffer, language: Lang) => Promise<string>;
+  transcribe: (audioBuffer: Buffer) => Promise<string>;
 }

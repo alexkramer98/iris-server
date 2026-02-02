@@ -3,7 +3,7 @@ import type { WebSocketServer } from "ws";
 import { environment } from "./Environment";
 import logger from "./Logger";
 
-export default class CompanionServer {
+export default class AppClient {
   private readonly wsServer: WebSocketServer;
 
   public constructor(

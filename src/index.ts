@@ -17,6 +17,8 @@ hassClient.onError(async (iets) => {
   //   todo: logger
 });
 
+hassClient.onAction("");
+
 const wyomingClient = new WyomingSpeechConverter();
 
 const pcmAudioBuffer = fs.readFileSync("audio.wav");
