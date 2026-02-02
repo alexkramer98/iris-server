@@ -61,11 +61,17 @@ type CallPayload = z.infer<typeof incomingActions.call>["payload"];
 
 type IncomingActionName = keyof typeof incomingActions;
 
-type IncomingActionPayload<TAction extends IncomingActionName> = z.infer<
-  (typeof incomingActions)[TAction]
->["payload"];
-
 type NotificationPayload = z.infer<typeof incomingActions.notify>["payload"];
+
+interface EventPayloadMap {
+  call: z.infer<typeof incomingActions.call>["payload"];
+  error: Error;
+  notify: z.infer<typeof incomingActions.notify>["payload"];
+  reNotify: z.infer<typeof incomingActions.reNotify>["payload"];
+  unNotify: z.infer<typeof incomingActions.unNotify>["payload"];
+}
+
+type EventName = keyof EventPayloadMap;
 
 interface OutgoingCommandMap {
   notify: NotificationPayload;
@@ -84,13 +90,10 @@ export default class HassClient {
 
   private activeClient: WebSocket | undefined;
 
-  private readonly actionHandlers: Partial<{
-    [TAction in IncomingActionName]: (
-      payload: IncomingActionPayload<TAction>,
-    ) => Promise<void>;
-  }> = {};
-
-  private errorHandler: ((error: Error) => void) | undefined = undefined;
+  private readonly handlers = new Map<
+    EventName,
+    (payload: EventPayloadMap[EventName]) => void
+  >();
 
   public constructor(config: { port: number }) {
     this.wsServer = new WebSocketServer({ port: config.port });
@@ -130,31 +133,20 @@ export default class HassClient {
 
       client.on("message", (message) => {
         if (this.activeClient === client) {
-          void this.handleMessage(message);
+          this.handleMessage(message);
         }
       });
     });
   }
 
-  public on(event: "error", handler: (error: Error) => void): void;
-  public on<TAction extends IncomingActionName>(
-    event: TAction,
-    handler: (payload: IncomingActionPayload<TAction>) => Promise<void>,
-  ): void;
-
-  public on(
-    event: IncomingActionName | "error",
-    handler: // todo: should probably be void instead of Promise<void>
-      | ((payload: IncomingActionPayload<IncomingActionName>) => Promise<void>)
-      | ((error: Error) => void),
+  public on<TEvent extends EventName>(
+    event: TEvent,
+    handler: (payload: EventPayloadMap[TEvent]) => void,
   ): void {
-    if (event === "error") {
-      this.errorHandler = handler as (error: Error) => void;
-    } else {
-      this.actionHandlers[event] = handler as (
-        payload: IncomingActionPayload<IncomingActionName>,
-      ) => Promise<void>;
-    }
+    this.handlers.set(
+      event,
+      handler as (payload: EventPayloadMap[EventName]) => void,
+    );
   }
 
   public send<TAction extends keyof OutgoingCommandMap>(
@@ -176,15 +168,15 @@ export default class HassClient {
     return incomingMessageSchema.parse(JSON.parse(message.toString()));
   }
 
-  private async handleAction<TAction extends IncomingActionName>(
-    action: TAction,
-    payload: IncomingActionPayload<TAction>,
-  ) {
-    await this.actionHandlers[action]?.(payload);
+  private handleAction(
+    action: IncomingActionName,
+    payload: EventPayloadMap[IncomingActionName],
+  ): void {
+    this.handlers.get(action)?.(payload);
   }
 
-  private emitError(error: Error) {
-    this.errorHandler?.(error);
+  private emitError(error: Error): void {
+    this.handlers.get("error")?.(error);
   }
 
   private emitErrorAndReply(error: Error) {
@@ -192,7 +184,7 @@ export default class HassClient {
     this.emitError(error);
   }
 
-  private async handleMessage(message: RawData) {
+  private handleMessage(message: RawData) {
     let incomingMessage: z.infer<typeof incomingMessageSchema> | undefined =
       undefined;
 
@@ -210,7 +202,7 @@ export default class HassClient {
     }
 
     try {
-      await this.handleAction(incomingMessage.action, incomingMessage.payload);
+      this.handleAction(incomingMessage.action, incomingMessage.payload);
     } catch (error) {
       this.emitErrorAndReply(
         new Error(
