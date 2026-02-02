@@ -13,11 +13,11 @@ const hassClient = new HassClient({
   port: environment.API_PORT,
 });
 
-hassClient.onError(async (iets) => {
+hassClient.on("error", (iets) => {
   //   todo: logger
 });
 
-hassClient.onAction("");
+hassClient.on("reNotify", async (payload) => {});
 
 const wyomingClient = new WyomingSpeechConverter();
 

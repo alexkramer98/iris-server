@@ -90,7 +90,7 @@ export default class HassClient {
     ) => Promise<void>;
   }> = {};
 
-  private errorHandler: ((payload: Error) => void) | undefined = undefined;
+  private errorHandler: ((error: Error) => void) | undefined = undefined;
 
   public constructor(config: { port: number }) {
     this.wsServer = new WebSocketServer({ port: config.port });
@@ -136,15 +136,25 @@ export default class HassClient {
     });
   }
 
-  public onAction<TAction extends IncomingActionName>(
-    action: TAction,
+  public on(event: "error", handler: (error: Error) => void): void;
+  public on<TAction extends IncomingActionName>(
+    event: TAction,
     handler: (payload: IncomingActionPayload<TAction>) => Promise<void>,
-  ) {
-    this.actionHandlers[action] = handler;
-  }
+  ): void;
 
-  public onError(handler: (payload: Error) => void) {
-    this.errorHandler = handler;
+  public on(
+    event: IncomingActionName | "error",
+    handler: // todo: should probably be void instead of Promise<void>
+      | ((payload: IncomingActionPayload<IncomingActionName>) => Promise<void>)
+      | ((error: Error) => void),
+  ): void {
+    if (event === "error") {
+      this.errorHandler = handler as (error: Error) => void;
+    } else {
+      this.actionHandlers[event] = handler as (
+        payload: IncomingActionPayload<IncomingActionName>,
+      ) => Promise<void>;
+    }
   }
 
   public send<TAction extends keyof OutgoingCommandMap>(
