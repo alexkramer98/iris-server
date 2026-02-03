@@ -1,3 +1,4 @@
+import { readonlyURL } from "readonly-types";
 import { WebSocketServer } from "ws";
 
 import Call from "./Call";
@@ -13,7 +14,9 @@ export default class AppClient {
     this.wsServer.on("connection", (ws, request) => {
       const token = this.extractToken(request.url);
 
+      // eslint-disable-next-line security/detect-possible-timing-attacks -- false positive
       if (token === undefined) {
+        // eslint-disable-next-line @typescript-eslint/no-magic-numbers -- 1008: Policy Violation
         ws.close(1008, "Missing token");
 
         return;
@@ -22,6 +25,7 @@ export default class AppClient {
       const call = this.pendingCalls.get(token);
 
       if (call === undefined) {
+        // eslint-disable-next-line @typescript-eslint/no-magic-numbers -- 1008: Policy Violation
         ws.close(1008, "Invalid token");
 
         return;
@@ -30,6 +34,8 @@ export default class AppClient {
       this.pendingCalls.delete(token);
       call.attach(ws);
     });
+
+    this.wsServer.on("error", (error) => {});
   }
 
   public expectCall(token: string): Call {
@@ -41,12 +47,6 @@ export default class AppClient {
   }
 
   private extractToken(url: string | undefined): string | undefined {
-    if (url === undefined) {
-      return undefined;
-    }
-
-    const searchParameters = new URLSearchParams(url.split("?")[1]);
-
-    return searchParameters.get("token") ?? undefined;
+    return readonlyURL(url ?? "")?.searchParams.get("token") ?? undefined;
   }
 }

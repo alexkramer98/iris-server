@@ -19,6 +19,7 @@
     "sonarjs/no-one-iteration-loop": "off",
     "etc/prefer-interface": "off",
     "perfectionist/sort-modules": "off",
+    "@stylistic/lines-between-class-members": "off",
 
     "camelcase": "warn",
     "sonarjs/elseif-without-else": "warn",

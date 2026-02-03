@@ -15,7 +15,8 @@
     "promise-socket": "^8.0.0",
     "tsx": "^4.21.0",
     "ws": "^8.18.3",
-    "zod": "^4.3.4"
+    "zod": "^4.3.4",
+    "readonly-types": "^4.5.0"
   },
   "devDependencies": {
     "eslint": "^8.57.0",

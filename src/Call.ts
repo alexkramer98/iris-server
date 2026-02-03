@@ -12,7 +12,9 @@ interface EventPayloadMap {
 
 type EventName = keyof EventPayloadMap;
 
-type OutgoingCommand = { command: "audio"; data: Buffer } | { command: "end" };
+type OutgoingCommand =
+  | { command: "audio"; payload: Buffer }
+  | { command: "end" };
 
 interface IncomingMessage {
   action:
@@ -25,20 +27,18 @@ interface IncomingMessage {
   payload?: { digit: string };
 }
 
-const TIMEOUT_MS = 5 * 60 * 1000;
+// 5 minutes
+const TIMEOUT_MS = 30_000;
 
 export default class Call {
-  private ws: WebSocket | undefined;
-
   private readonly handlers = new Map<
     EventName,
     (payload: EventPayloadMap[EventName]) => void
   >();
 
-  private timeoutId: ReturnType<typeof setTimeout> | undefined;
-
+  private ws: WebSocket | undefined;
+  private timeout: ReturnType<typeof setTimeout> | undefined;
   private audioChunks: Buffer[] = [];
-
   private isReceivingAudio = false;
 
   public constructor() {
@@ -64,13 +64,12 @@ export default class Call {
       this.ws.send(JSON.stringify({ command: "end" }));
     } else {
       this.ws.send(JSON.stringify({ command: "audioStart" }));
-      this.ws.send(message.data);
+      this.ws.send(message.payload);
       this.ws.send(JSON.stringify({ command: "audioEnd" }));
     }
   }
 
   public attach(ws: WebSocket): void {
-    this.clearTimeout();
     this.ws = ws;
 
     ws.on("message", (data, isBinary) => {
@@ -86,9 +85,12 @@ export default class Call {
         "error",
         new Error(`WebSocket error: ${error.message}`, { cause: error }),
       );
+      this.ws?.close();
+      this.clearTimeout();
     });
 
     ws.on("close", () => {
+      // todo: error?
       this.ws = undefined;
     });
   }
@@ -103,6 +105,7 @@ export default class Call {
       return;
     }
 
+    // todo: probably just the first
     if (Buffer.isBuffer(data)) {
       this.audioChunks.push(data);
     } else if (Array.isArray(data)) {
@@ -163,15 +166,15 @@ export default class Call {
   }
 
   private startTimeout(): void {
-    this.timeoutId = setTimeout(() => {
+    this.timeout = setTimeout(() => {
       this.emit("timeout", undefined);
     }, TIMEOUT_MS);
   }
 
   private clearTimeout(): void {
-    if (this.timeoutId !== undefined) {
-      clearTimeout(this.timeoutId);
-      this.timeoutId = undefined;
+    if (this.timeout !== undefined) {
+      clearTimeout(this.timeout);
+      this.timeout = undefined;
     }
   }
 }
