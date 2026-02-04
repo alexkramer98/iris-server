@@ -1,59 +1,39 @@
 import type { RawData, WebSocket } from "ws";
+import { z } from "zod";
+
+import EventEmitter from "./EventEmitter";
+
+const incomingMessageSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("accepted"), payload: z.undefined() }),
+  z.object({ action: z.literal("audioEnd"), payload: z.undefined() }),
+  z.object({ action: z.literal("audioStart"), payload: z.undefined() }),
+  z.object({
+    action: z.literal("dtmf"),
+    payload: z.object({ digit: z.string() }),
+  }),
+  z.object({ action: z.literal("ended"), payload: z.undefined() }),
+  z.object({ action: z.literal("rejected"), payload: z.undefined() }),
+]);
 
 interface EventPayloadMap {
   accepted: undefined;
   audio: { data: Buffer };
+  connected: undefined;
+  disconnected: undefined;
   dtmf: { digit: string };
   ended: undefined;
   error: Error;
   rejected: undefined;
-  timeout: undefined;
 }
-
-type EventName = keyof EventPayloadMap;
 
 type OutgoingCommand =
   | { command: "audio"; payload: Buffer }
   | { command: "end" };
 
-interface IncomingMessage {
-  action:
-    | "accepted"
-    | "audioEnd"
-    | "audioStart"
-    | "dtmf"
-    | "ended"
-    | "rejected";
-  payload?: { digit: string };
-}
-
-// 5 minutes
-const TIMEOUT_MS = 30_000;
-
-export default class Call {
-  private readonly handlers = new Map<
-    EventName,
-    (payload: EventPayloadMap[EventName]) => void
-  >();
-
+export default class Call extends EventEmitter<EventPayloadMap> {
   private ws: WebSocket | undefined;
-  private timeout: ReturnType<typeof setTimeout> | undefined;
   private audioChunks: Buffer[] = [];
   private isReceivingAudio = false;
-
-  public constructor() {
-    this.startTimeout();
-  }
-
-  public on<TEvent extends EventName>(
-    event: TEvent,
-    handler: (payload: EventPayloadMap[TEvent]) => void,
-  ): void {
-    this.handlers.set(
-      event,
-      handler as (payload: EventPayloadMap[EventName]) => void,
-    );
-  }
 
   public send(message: OutgoingCommand): void {
     if (this.ws === undefined) {
@@ -71,12 +51,13 @@ export default class Call {
 
   public attach(ws: WebSocket): void {
     this.ws = ws;
+    this.emit("connected", undefined);
 
     ws.on("message", (data, isBinary) => {
       if (isBinary) {
         this.handleBinaryMessage(data);
       } else {
-        this.handleTextMessage(data);
+        this.handleTextMessage(data.toString());
       }
     });
 
@@ -86,11 +67,10 @@ export default class Call {
         new Error(`WebSocket error: ${error.message}`, { cause: error }),
       );
       this.ws?.close();
-      this.clearTimeout();
     });
 
     ws.on("close", () => {
-      // todo: error?
+      this.emit("disconnected", undefined);
       this.ws = undefined;
     });
   }
@@ -115,22 +95,27 @@ export default class Call {
     }
   }
 
-  private handleTextMessage(data: RawData): void {
-    let message: IncomingMessage;
+  private handleTextMessage(text: string): void {
+    const result = incomingMessageSchema.safeParse(JSON.parse(text));
 
-    try {
-      const text = Buffer.isBuffer(data) ? data.toString() : String(data);
-
-      message = JSON.parse(text) as IncomingMessage;
-    } catch {
-      this.emit("error", new Error("Invalid JSON message"));
+    if (!result.success) {
+      // todo: send message to client too?
+      this.emit("error", new Error("Invalid message format"));
 
       return;
     }
 
+    this.handleAction(result.data);
+  }
+
+  private handleAction(message: z.infer<typeof incomingMessageSchema>): void {
+    // eslint-disable-next-line default-case -- exhaustiveness is checked
     switch (message.action) {
-      case "accepted": {
-        this.emit("accepted", undefined);
+      case "accepted":
+      case "dtmf":
+      case "ended":
+      case "rejected": {
+        this.emit(message.action, message.payload);
 
         break;
       }
@@ -147,34 +132,6 @@ export default class Call {
 
         break;
       }
-
-      case "dtmf":
-      case "ended":
-      case "rejected": {
-        this.emit(message.action, message.payload);
-
-        break;
-      }
-    }
-  }
-
-  private emit<TEvent extends EventName>(
-    event: TEvent,
-    payload: EventPayloadMap[TEvent],
-  ): void {
-    this.handlers.get(event)?.(payload);
-  }
-
-  private startTimeout(): void {
-    this.timeout = setTimeout(() => {
-      this.emit("timeout", undefined);
-    }, TIMEOUT_MS);
-  }
-
-  private clearTimeout(): void {
-    if (this.timeout !== undefined) {
-      clearTimeout(this.timeout);
-      this.timeout = undefined;
     }
   }
 }

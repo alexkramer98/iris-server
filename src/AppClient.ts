@@ -2,13 +2,19 @@ import { readonlyURL } from "readonly-types";
 import { WebSocketServer } from "ws";
 
 import Call from "./Call";
+import EventEmitter from "./EventEmitter";
 
-export default class AppClient {
+interface EventPayloadMap {
+  error: Error;
+}
+
+export default class AppClient extends EventEmitter<EventPayloadMap> {
   private readonly wsServer: WebSocketServer;
 
   private readonly pendingCalls = new Map<string, Call>();
 
   public constructor(config: { port: number }) {
+    super();
     this.wsServer = new WebSocketServer({ port: config.port });
 
     this.wsServer.on("connection", (ws, request) => {
@@ -35,7 +41,12 @@ export default class AppClient {
       call.attach(ws);
     });
 
-    this.wsServer.on("error", (error) => {});
+    this.wsServer.on("error", (error) => {
+      this.emit(
+        "error",
+        new Error(`WebSocket server error: ${error.message}`, { cause: error }),
+      );
+    });
   }
 
   public expectCall(token: string): Call {

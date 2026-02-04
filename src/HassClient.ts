@@ -4,6 +4,8 @@ import type { RawData, WebSocket } from "ws";
 import { WebSocketServer } from "ws";
 import { z } from "zod";
 
+import EventEmitter from "./EventEmitter";
+
 const incomingActions = {
   notify: z.object({
     action: z.literal("notify"),
@@ -71,8 +73,6 @@ interface EventPayloadMap {
   unNotify: z.infer<typeof incomingActions.unNotify>["payload"];
 }
 
-type EventName = keyof EventPayloadMap;
-
 interface OutgoingCommandMap {
   notify: NotificationPayload;
   startCall: {
@@ -85,17 +85,13 @@ interface OutgoingCommandMap {
   };
 }
 
-export default class HassClient {
+export default class HassClient extends EventEmitter<EventPayloadMap> {
   private readonly wsServer: WebSocketServer;
 
   private activeClient: WebSocket | undefined;
 
-  private readonly handlers = new Map<
-    EventName,
-    (payload: EventPayloadMap[EventName]) => void
-  >();
-
   public constructor(config: { port: number }) {
+    super();
     this.wsServer = new WebSocketServer({ port: config.port });
 
     this.wsServer.on("connection", (client) => {
@@ -139,16 +135,6 @@ export default class HassClient {
     });
   }
 
-  public on<TEvent extends EventName>(
-    event: TEvent,
-    handler: (payload: EventPayloadMap[TEvent]) => void,
-  ): void {
-    this.handlers.set(
-      event,
-      handler as (payload: EventPayloadMap[EventName]) => void,
-    );
-  }
-
   public send<TAction extends keyof OutgoingCommandMap>(
     command: TAction,
     payload: OutgoingCommandMap[TAction],
@@ -172,11 +158,11 @@ export default class HassClient {
     action: IncomingActionName,
     payload: EventPayloadMap[IncomingActionName],
   ): void {
-    this.handlers.get(action)?.(payload);
+    this.emit(action, payload);
   }
 
   private emitError(error: Error): void {
-    this.handlers.get("error")?.(error);
+    this.emit("error", error);
   }
 
   private emitErrorAndReply(error: Error) {
