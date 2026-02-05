@@ -57,7 +57,7 @@ export default class Call extends EventEmitter<EventPayloadMap> {
       if (isBinary) {
         this.handleBinaryMessage(data);
       } else {
-        this.handleTextMessage(data.toString());
+        this.handleTextMessage(data);
       }
     });
 
@@ -95,7 +95,9 @@ export default class Call extends EventEmitter<EventPayloadMap> {
     }
   }
 
-  private handleTextMessage(text: string): void {
+  private handleTextMessage(data: RawData): void {
+    const text = Buffer.isBuffer(data) ? data.toString() : data;
+
     const result = incomingMessageSchema.safeParse(JSON.parse(text));
 
     if (!result.success) {

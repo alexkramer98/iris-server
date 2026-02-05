@@ -1,3 +1,6 @@
+import http from "node:http";
+import type { Duplex } from "node:stream";
+
 import { readonlyURL } from "readonly-types";
 import { WebSocketServer } from "ws";
 
@@ -9,21 +12,21 @@ interface EventPayloadMap {
 }
 
 export default class AppClient extends EventEmitter<EventPayloadMap> {
+  private readonly httpServer: http.Server;
   private readonly wsServer: WebSocketServer;
-
   private readonly pendingCalls = new Map<string, Call>();
 
   public constructor(config: { port: number }) {
     super();
-    this.wsServer = new WebSocketServer({ port: config.port });
+    this.httpServer = http.createServer();
+    this.wsServer = new WebSocketServer({ noServer: true });
 
-    this.wsServer.on("connection", (ws, request) => {
-      const token = this.extractToken(request.url);
+    this.httpServer.on("upgrade", (request, socket, head) => {
+      const token = this.getToken(request.url);
 
       // eslint-disable-next-line security/detect-possible-timing-attacks -- false positive
       if (token === undefined) {
-        // eslint-disable-next-line @typescript-eslint/no-magic-numbers -- 1008: Policy Violation
-        ws.close(1008, "Missing token");
+        this.destroySocket(socket, "HTTP/1.1 401 Unauthorized");
 
         return;
       }
@@ -31,22 +34,31 @@ export default class AppClient extends EventEmitter<EventPayloadMap> {
       const call = this.pendingCalls.get(token);
 
       if (call === undefined) {
-        // eslint-disable-next-line @typescript-eslint/no-magic-numbers -- 1008: Policy Violation
-        ws.close(1008, "Invalid token");
+        this.destroySocket(socket, "HTTP/1.1 403 Forbidden");
 
         return;
       }
 
-      this.pendingCalls.delete(token);
-      call.attach(ws);
+      this.wsServer.handleUpgrade(request, socket, head, (ws) => {
+        this.pendingCalls.delete(token);
+        call.attach(ws);
+      });
     });
 
+    this.httpServer.on("error", (error) => {
+      this.emit(
+        "error",
+        new Error(`HTTP server error: ${error.message}`, { cause: error }),
+      );
+    });
     this.wsServer.on("error", (error) => {
       this.emit(
         "error",
-        new Error(`WebSocket server error: ${error.message}`, { cause: error }),
+        new Error(`WS server error: ${error.message}`, { cause: error }),
       );
     });
+
+    this.httpServer.listen(config.port);
   }
 
   public expectCall(token: string): Call {
@@ -57,7 +69,12 @@ export default class AppClient extends EventEmitter<EventPayloadMap> {
     return call;
   }
 
-  private extractToken(url: string | undefined): string | undefined {
+  private destroySocket(socket: Duplex, message: string) {
+    socket.write(`${message}\r\n\r\n`);
+    socket.destroy();
+  }
+
+  private getToken(url: string | undefined) {
     return readonlyURL(url ?? "")?.searchParams.get("token") ?? undefined;
   }
 }
